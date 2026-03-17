@@ -1,0 +1,95 @@
+{
+  "version": "1.0.0",
+  "description": "Configurable risk posture for trading system",
+  "postures": {
+    "conservative": {
+      "max_portfolio_risk_per_trade": 0.015,
+      "max_position_size_percent": 0.08,
+      "max_daily_loss_percent": 0.03,
+      "max_portfolio_heat_percent": 0.20,
+      "max_correlation_exposure": 0.25,
+      "min_confidence_threshold": 0.70,
+      "min_historical_trades": 10,
+      "min_win_rate": 0.50,
+      "max_positions_per_symbol": 2,
+      "max_concurrent_strategies": 3,
+      "preferred_strategies": ["iron_condor", "credit_spread"],
+      "avoid_strategies": ["the_wheel"],
+      "iv_rank_range": {
+        "min": 30,
+        "max": 60
+      },
+      "position_sizing_method": "kelly_half",
+      "stop_loss_multiplier": 1.5,
+      "profit_target_multiplier": 0.50
+    },
+    "moderate": {
+      "max_portfolio_risk_per_trade": 0.02,
+      "max_position_size_percent": 0.10,
+      "max_daily_loss_percent": 0.05,
+      "max_portfolio_heat_percent": 0.30,
+      "max_correlation_exposure": 0.35,
+      "min_confidence_threshold": 0.60,
+      "min_historical_trades": 5,
+      "min_win_rate": 0.45,
+      "max_positions_per_symbol": 3,
+      "max_concurrent_strategies": 5,
+      "preferred_strategies": ["iron_condor", "credit_spread", "the_wheel"],
+      "avoid_strategies": [],
+      "iv_rank_range": {
+        "min": 20,
+        "max": 70
+      },
+      "position_sizing_method": "kelly_half",
+      "stop_loss_multiplier": 2.0,
+      "profit_target_multiplier": 0.50
+    },
+    "aggressive": {
+      "max_portfolio_risk_per_trade": 0.03,
+      "max_position_size_percent": 0.15,
+      "max_daily_loss_percent": 0.08,
+      "max_portfolio_heat_percent": 0.45,
+      "max_correlation_exposure": 0.50,
+      "min_confidence_threshold": 0.55,
+      "min_historical_trades": 3,
+      "min_win_rate": 0.40,
+      "max_positions_per_symbol": 5,
+      "max_concurrent_strategies": 7,
+      "preferred_strategies": ["credit_spread", "the_wheel", "iron_condor"],
+      "avoid_strategies": [],
+      "iv_rank_range": {
+        "min": 15,
+        "max": 85
+      },
+      "position_sizing_method": "kelly_full",
+      "stop_loss_multiplier": 2.5,
+      "profit_target_multiplier": 0.40
+    }
+  },
+  "active_posture": "moderate",
+  "global_constraints": {
+    "paper_trading_only": true,
+    "max_slippage_percent": 0.02,
+    "min_liquidity_ratio": 10,
+    "market_hours_only": true,
+    "block_earnings_week": false,
+    "block_fomc_days": true,
+    "max_order_retries": 3
+  },
+  "emergency_protocols": {
+    "daily_loss_limit_triggered": {
+      "action": "halt_new_positions",
+      "notify": true,
+      "duration": "24h"
+    },
+    "vix_spike_above_35": {
+      "action": "reduce_position_sizes",
+      "reduction_factor": 0.5,
+      "notify": true
+    },
+    "correlation_breakdown": {
+      "action": "close_correlated_positions",
+      "notify": true
+    }
+  }
+}
