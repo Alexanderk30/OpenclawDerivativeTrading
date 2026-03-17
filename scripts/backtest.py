@@ -15,24 +15,20 @@ def run_backtest(strategy_name: str, symbol: str = None, days: int = 90):
     """Run a backtest for a strategy."""
     logger.info(f"Starting backtest: {strategy_name} on {symbol} for {days} days")
     
-    # Load strategy
+    # Load strategy using the execution engine's registry
     import yaml
+    from src.execution.execution_engine import STRATEGY_REGISTRY, _import_strategy_class
+
     with open("config/strategies.yaml", "r") as f:
         strategies_config = yaml.safe_load(f)
-    
+
     strategy_config = strategies_config.get(strategy_name, {})
-    
-    if strategy_name == "iron_condor":
-        from src.strategies.iron_condor import IronCondorStrategy
-        strategy = IronCondorStrategy(strategy_config)
-    elif strategy_name == "credit_spread":
-        from src.strategies.credit_spread import CreditSpreadStrategy
-        strategy = CreditSpreadStrategy(strategy_config)
-    elif strategy_name == "wheel_strategy":
-        from src.strategies.wheel_strategy import WheelStrategy
-        strategy = WheelStrategy(strategy_config)
-    else:
-        raise ValueError(f"Unknown strategy: {strategy_name}")
+
+    dotted_path = STRATEGY_REGISTRY.get(strategy_name)
+    if dotted_path is None:
+        raise ValueError(f"Unknown strategy: {strategy_name}. Available: {list(STRATEGY_REGISTRY.keys())}")
+    strategy_cls = _import_strategy_class(dotted_path)
+    strategy = strategy_cls(strategy_config)
     
     # Simulate backtest data
     # In production, load actual historical data

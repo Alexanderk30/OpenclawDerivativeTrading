@@ -62,14 +62,24 @@ class PaperTradingSimulator(BaseBroker):
             self.balance -= cost
             
             if symbol in self.positions:
-                self.positions[symbol]["qty"] += qty
+                existing = self.positions[symbol]
+                total_qty = existing["qty"] + qty
+                # Weighted average entry price
+                existing["avg_entry_price"] = (
+                    (existing["avg_entry_price"] * existing["qty"] + order["fill_price"] * qty)
+                    / total_qty
+                )
+                existing["qty"] = total_qty
+                existing["market_value"] = total_qty * order["fill_price"]
             else:
                 self.positions[symbol] = {
                     "symbol": symbol,
                     "qty": qty,
+                    "avg_entry_price": order["fill_price"],
                     "market_value": qty * order["fill_price"],
                     "unrealized_pl": 0.0,
-                    "unrealized_plpc": 0.0
+                    "unrealized_plpc": 0.0,
+                    "asset_class": "us_equity",
                 }
         else:
             proceeds = qty * order["fill_price"]

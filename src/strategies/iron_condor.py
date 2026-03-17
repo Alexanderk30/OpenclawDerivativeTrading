@@ -1,6 +1,6 @@
 """Iron Condor options strategy implementation."""
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .base_strategy import BaseStrategy, Signal
 
@@ -44,7 +44,7 @@ class IronCondorStrategy(BaseStrategy):
         
         return signals
     
-    def _analyze_symbol(self, symbol: str, data: Dict) -> Signal:
+    def _analyze_symbol(self, symbol: str, data: Dict) -> Optional[Signal]:
         """Analyze a single symbol for Iron Condor opportunity."""
         # This is a simplified implementation
         # In production, you'd:
@@ -64,7 +64,11 @@ class IronCondorStrategy(BaseStrategy):
         
         credit_estimate = current_price * 0.01  # ~1% of stock price
         max_risk = self.spread_width - credit_estimate
-        
+
+        # Guard against zero or negative max risk
+        if max_risk <= 0:
+            return None
+
         # Check if meets criteria
         if credit_estimate / max_risk < self.min_credit_ratio:
             return None

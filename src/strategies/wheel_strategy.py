@@ -1,6 +1,6 @@
 """The Wheel Strategy - CSPs + Covered Calls."""
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .base_strategy import BaseStrategy, Signal
 
@@ -38,7 +38,11 @@ class WheelStrategy(BaseStrategy):
         
         # Get current positions to determine phase
         positions = data.get("positions", [])
-        stock_positions = {p["symbol"]: p for p in positions if p["asset_class"] == "stock"}
+        # Accept both "stock" and "us_equity" (Alpaca's naming)
+        stock_positions = {
+            p["symbol"]: p for p in positions
+            if p.get("asset_class", "us_equity") in ("stock", "us_equity")
+        }
         
         for symbol in self.symbols:
             try:
@@ -57,7 +61,7 @@ class WheelStrategy(BaseStrategy):
         
         return signals
     
-    def _generate_csp_signal(self, symbol: str, data: Dict) -> Signal:
+    def _generate_csp_signal(self, symbol: str, data: Dict) -> Optional[Signal]:
         """Generate Cash Secured Put signal."""
         current_price = data.get("price", {}).get(symbol, 0)
         if current_price == 0:
@@ -103,8 +107,8 @@ class WheelStrategy(BaseStrategy):
             }
         )
     
-    def _generate_covered_call_signal(self, symbol: str, position: Dict, 
-                                      data: Dict) -> Signal:
+    def _generate_covered_call_signal(self, symbol: str, position: Dict,
+                                      data: Dict) -> Optional[Signal]:
         """Generate Covered Call signal."""
         current_price = data.get("price", {}).get(symbol, 0)
         cost_basis = position.get("avg_entry_price", current_price)

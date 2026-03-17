@@ -1,6 +1,6 @@
 """Credit Spread strategy implementation."""
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .base_strategy import BaseStrategy, Signal
 
@@ -51,23 +51,30 @@ class CreditSpreadStrategy(BaseStrategy):
         return signals
     
     def _determine_direction(self, symbol: str, data: Dict) -> str:
-        """Determine market direction for symbol."""
-        # Simplified - would use technical analysis
-        # Return: "bullish", "bearish", or "neutral"
-        
+        """
+        Determine market direction for symbol using adaptive SMA crossover.
+
+        Uses all available price history — the short window is half the long
+        window, adapting to whatever data is available (minimum 5 data points).
+        """
         price_data = data.get("price_history", {}).get(symbol, [])
-        if len(price_data) < 20:
+
+        # Need at least 5 data points for any meaningful signal
+        if len(price_data) < 5:
             return "neutral"
-        
-        # Simple moving average crossover
-        sma_short = sum(price_data[-10:]) / 10
-        sma_long = sum(price_data[-20:]) / 20
-        
+
+        # Adaptive window: use available data, long window = all data (up to 20)
+        long_window = min(len(price_data), 20)
+        short_window = max(long_window // 2, 2)
+
+        sma_short = sum(price_data[-short_window:]) / short_window
+        sma_long = sum(price_data[-long_window:]) / long_window
+
         if sma_short > sma_long * 1.01:
             return "bullish"
         elif sma_short < sma_long * 0.99:
             return "bearish"
-        
+
         return "neutral"
     
     def _create_spread_signal(self, symbol: str, direction: str, 
