@@ -1,0 +1,58 @@
+# Iron Condor Strategy Configuration
+iron_condor:
+  enabled: true
+  symbols:
+    - SPY
+    - QQQ
+    - IWM
+  # Days to expiration
+  min_dte: 30
+  max_dte: 45
+  # Delta targets for short legs
+  short_put_delta: -0.15
+  short_call_delta: 0.15
+  # Width between short and long legs
+  spread_width: 5.0
+  # Minimum credit received as % of spread width
+  min_credit_ratio: 0.30
+  # Profit taking and stop loss
+  profit_target: 0.50  # Close at 50% of max profit
+  stop_loss: 2.00      # Close at 200% of credit received
+  # Position sizing
+  max_risk_per_trade: 0.02
+  max_concurrent_positions: 3
+
+# Credit Spread Strategy
+credit_spread:
+  enabled: true
+  symbols:
+    - SPY
+    - QQQ
+    - AAPL
+    - TSLA
+  min_dte: 21
+  max_dte: 45
+  put_spread_delta: -0.20
+  call_spread_delta: 0.20
+  spread_width: 5.0
+  min_credit_ratio: 0.25
+  profit_target: 0.50
+  stop_loss: 2.00
+
+# Wheel Strategy Configuration
+wheel_strategy:
+  enabled: true
+  symbols:
+    - AAPL
+    - MSFT
+    - JPM
+  # Cash Secured Put settings
+  csp_delta: -0.30
+  csp_dte: 30
+  # Covered Call settings (after assignment)
+  cc_delta: 0.30
+  cc_dte: 30
+  # Wheel only on stocks you're willing to own
+  max_allocation_per_stock: 0.10
+  # Premium targets
+  min_annual_premium_target: 0.15  # 15% annual target

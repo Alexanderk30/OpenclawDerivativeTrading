@@ -1,0 +1,97 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables - NEVER COMMIT THESE!
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+secrets/
+credentials/
+config.json
+secrets.json
+
+# API Keys and Secrets (common patterns)
+*api_key*
+*apikey*
+*secret*
+*password*
+*token*
+*private*
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+log/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Trading specific
+trades/
+portfolio_state.json
+positions_backup/
+state/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Backtest results
+backtest_results/
+*.csv
+!examples/*.csv
+
+# Temporary files
+tmp/
+temp/
+*.tmp
