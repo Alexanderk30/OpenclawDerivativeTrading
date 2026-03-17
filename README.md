@@ -6,6 +6,37 @@ A sophisticated algorithmic trading system for derivatives (options, futures) bu
 
 **IMPORTANT**: This repository contains NO API keys, secrets, or credentials. All sensitive configuration must be managed via environment variables or a secure `.env` file (which is gitignored).
 
+## 🧠 NEW: Collective Knowledge Graph
+
+This trading bot now includes a **distributed knowledge graph** that enables multiple trading agents to learn collectively. Every trade contributes to shared intelligence that improves strategy performance over time.
+
+### Knowledge Graph Features:
+- **Trade Outcome Storage**: Capture P&L, market context, and lessons learned
+- **Strategy Insights**: Share discoveries about what works/doesn't work
+- **Pattern Recognition**: Automatically identify successful setups
+- **Collective Learning**: All agents benefit from each other's experience
+
+### Quick Usage:
+```python
+from src.knowledge_graph import get_kg
+
+kg = get_kg()
+
+# Before trading - check historical performance
+perf = kg.get_performance_summary(symbol="SPY", strategy="iron_condor")
+
+# After trading - store what you learned
+kg.store_trade_outcome(
+    agent_id="my_agent",
+    symbol="SPY",
+    strategy="iron_condor",
+    pnl=340.0,
+    lessons_learned=["Waited for IV contraction"]
+)
+```
+
+See `docs/KNOWLEDGE_GRAPH.md` for full documentation.
+
 ## 📁 Project Structure
 
 ```
@@ -40,6 +71,15 @@ OpenclawDerivativeTrading/
 │   │   ├── __init__.py
 │   │   ├── order_manager.py     # Order lifecycle management
 │   │   └── execution_engine.py  # Trade execution logic
+│   ├── knowledge_graph/         # NEW: Collective learning system
+│   │   ├── __init__.py
+│   │   ├── kg_client.py         # Knowledge graph client
+│   │   ├── index.json           # Fast lookup index
+│   │   └── nodes/               # Knowledge storage
+│   │       ├── trade_outcomes/
+│   │       ├── market_patterns/
+│   │       ├── strategy_insights/
+│   │       └── parameter_tuning/
 │   ├── data/
 │   │   ├── __init__.py
 │   │   ├── market_data.py       # Real-time data feed
@@ -60,6 +100,7 @@ OpenclawDerivativeTrading/
 └── docs/
     ├── SETUP.md             # Setup instructions
     ├── STRATEGIES.md        # Strategy documentation
+    ├── KNOWLEDGE_GRAPH.md   # Knowledge graph documentation
     └── API.md               # API reference
 ```
 
@@ -91,7 +132,7 @@ ALPACA_SECRET_KEY=your_secret_key_here
 ALPACA_BASE_URL=https://paper-api.alpaca.markets  # Use paper trading first!
 
 # Trading Configuration
-MAX_PORTfolio_RISK=0.02          # Max 2% portfolio risk per trade
+MAX_PORTFOLIO_RISK=0.02          # Max 2% portfolio risk per trade
 MAX_POSITION_SIZE=0.10           # Max 10% in single position
 DEFAULT_QUANTITY=1               # Default contract quantity
 ENABLE_NOTIFICATIONS=true
@@ -191,6 +232,7 @@ mypy src/
 
 ## 📋 TODO
 
+- [x] Implement knowledge graph for collective learning
 - [ ] Implement IV rank/percentile filtering
 - [ ] Add more complex Greeks monitoring
 - [ ] Web dashboard for monitoring
