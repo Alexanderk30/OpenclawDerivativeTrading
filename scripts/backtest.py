@@ -2,7 +2,11 @@
 """Backtesting script for strategies."""
 import argparse
 import logging
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import config
 from src.utils.logger import setup_logging

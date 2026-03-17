@@ -4,8 +4,8 @@ import logging
 import sys
 from pathlib import Path
 
-from config import config
-from utils.logger import setup_logging
+from config.settings import config
+from src.utils.logger import setup_logging
 
 
 def main():
@@ -26,7 +26,25 @@ def main():
         "--symbol",
         help="Symbol to trade"
     )
-    
+    parser.add_argument(
+        "--dashboard",
+        action="store_true",
+        default=True,
+        help="Enable web dashboard (default: enabled)"
+    )
+    parser.add_argument(
+        "--no-dashboard",
+        dest="dashboard",
+        action="store_false",
+        help="Disable web dashboard"
+    )
+    parser.add_argument(
+        "--dashboard-port",
+        type=int,
+        default=8080,
+        help="Dashboard port (default: 8080)"
+    )
+
     args = parser.parse_args()
     
     # Setup logging
@@ -61,7 +79,13 @@ def main():
         run_backtest(args.strategy, args.symbol)
     else:
         from src.execution.execution_engine import ExecutionEngine
-        engine = ExecutionEngine(args.strategy, args.mode)
+        engine = ExecutionEngine(
+            args.strategy, args.mode,
+            enable_dashboard=args.dashboard,
+            dashboard_port=args.dashboard_port,
+        )
+        if args.dashboard:
+            logger.info(f"Dashboard available at http://localhost:{args.dashboard_port}")
         engine.run()
 
 

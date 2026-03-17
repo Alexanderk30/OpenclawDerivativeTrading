@@ -60,7 +60,7 @@ class ExecutionEngine:
     """Main execution engine that coordinates trading."""
 
     def __init__(self, strategy_name: str, mode: str = "paper",
-                 enable_dashboard: bool = False, dashboard_port: int = 5000):
+                 enable_dashboard: bool = False, dashboard_port: int = 8080):
         self.strategy_name = strategy_name
         self.mode = mode
         self.running = False
@@ -103,8 +103,27 @@ class ExecutionEngine:
         self._tz = ZoneInfo(config.TIMEZONE)
 
     def _init_broker(self):
-        """Initialize the appropriate broker client via the factory."""
-        broker_name = "paper" if self.mode == "paper" else self.mode
+        """Initialize the appropriate broker client via the factory.
+
+        For paper mode, prefer Alpaca paper trading when API keys are
+        configured (real market simulation). Fall back to the local
+        PaperTradingSimulator only if keys are missing.
+        """
+        if self.mode == "paper":
+            # Try Alpaca paper trading first
+            import os
+            if os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
+                broker = BrokerFactory.create("alpaca")
+                if broker.connect():
+                    logger.info("Using Alpaca paper trading API")
+                    return broker
+                logger.warning("Alpaca paper connection failed — falling back to local simulator")
+            else:
+                logger.info("No Alpaca API keys found — using local paper simulator")
+            broker_name = "paper"
+        else:
+            broker_name = self.mode
+
         broker = BrokerFactory.create(broker_name)
         if not broker.connect():
             raise RuntimeError(f"Failed to connect to broker: {broker_name}")
@@ -173,6 +192,7 @@ class ExecutionEngine:
         # Start dashboard if configured
         if self.dashboard:
             self.dashboard.start(background=True)
+            logger.info(f"Dashboard running at http://localhost:{self.dashboard._port}")
 
         # Register signal handlers for graceful shutdown
         original_sigint = signal.getsignal(signal.SIGINT)
