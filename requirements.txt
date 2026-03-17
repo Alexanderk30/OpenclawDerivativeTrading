@@ -6,6 +6,11 @@ alpaca-py>=0.8.0
 pandas>=1.5.0
 numpy>=1.24.0
 yfinance>=0.2.0
+scipy>=1.10.0
+
+# Machine learning
+scikit-learn>=1.2.0
+joblib>=1.2.0
 
 # Configuration
 python-dotenv>=1.0.0
@@ -14,6 +19,9 @@ pyyaml>=6.0
 # API and networking
 requests>=2.28.0
 websocket-client>=1.5.0
+
+# Web dashboard
+flask>=3.0.0
 
 # Utilities
 tzlocal>=4.3
@@ -38,6 +46,9 @@ slack-sdk>=3.21.0
 # Optional: Data visualization
 matplotlib>=3.7.0
 plotly>=5.14.0
+
+# Optional: Interactive Brokers
+# ib_insync>=0.9.86
 
 # Type hints
 types-requests>=2.31.0

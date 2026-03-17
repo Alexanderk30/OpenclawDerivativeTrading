@@ -9,14 +9,34 @@ import yaml
 from zoneinfo import ZoneInfo
 
 from config import config
-from src.broker.alpaca_client import AlpacaClient
-from src.broker.paper_trading import PaperTradingSimulator
+from src.broker.broker_factory import BrokerFactory
 from src.risk.risk_manager import RiskManager
 from src.risk.position_sizer import PositionSizer
 from src.utils.logger import setup_logging
 from src.utils.notifications import NotificationManager
 
 logger = logging.getLogger(__name__)
+
+# Optional modules — gracefully degrade if not available
+try:
+    from src.data.iv_analyzer import IVAnalyzer
+except ImportError:
+    IVAnalyzer = None
+
+try:
+    from src.data.greeks import GreeksMonitor
+except ImportError:
+    GreeksMonitor = None
+
+try:
+    from src.data.ml_signals import MLSignalEnhancer
+except ImportError:
+    MLSignalEnhancer = None
+
+try:
+    from src.dashboard.app import DashboardServer
+except ImportError:
+    DashboardServer = None
 
 # Strategy registry — avoids repeated if/elif chains
 # Includes aliases so agent specs ("the_wheel") and code ("wheel_strategy") both work
@@ -39,7 +59,8 @@ def _import_strategy_class(dotted_path: str):
 class ExecutionEngine:
     """Main execution engine that coordinates trading."""
 
-    def __init__(self, strategy_name: str, mode: str = "paper"):
+    def __init__(self, strategy_name: str, mode: str = "paper",
+                 enable_dashboard: bool = False, dashboard_port: int = 5000):
         self.strategy_name = strategy_name
         self.mode = mode
         self.running = False
@@ -50,27 +71,59 @@ class ExecutionEngine:
             strategies_config = yaml.safe_load(f)
         self.strategy_config = strategies_config.get(strategy_name, {})
 
-        # Initialize components
+        # Initialize broker via factory
         self.broker = self._init_broker()
+
+        # Core components
         self.risk_manager = RiskManager(broker=self.broker)
-        self.position_sizer = PositionSizer()  # Reused across signals
+        self.position_sizer = PositionSizer()
         self.notifier = NotificationManager()
         self.strategy = self._init_strategy()
+
+        # Optional analytics modules
+        self.iv_analyzer = IVAnalyzer() if IVAnalyzer else None
+        self.greeks_monitor = GreeksMonitor() if GreeksMonitor else None
+        self.ml_enhancer = self._init_ml_enhancer()
+
+        # Dashboard
+        self.dashboard = None
+        if enable_dashboard and DashboardServer:
+            self.dashboard = DashboardServer(
+                risk_manager=self.risk_manager,
+                broker=self.broker,
+                iv_analyzer=self.iv_analyzer,
+                greeks_monitor=self.greeks_monitor,
+                ml_enhancer=self.ml_enhancer,
+                port=dashboard_port,
+            )
+            symbols = self.strategy_config.get("symbols", [])
+            self.dashboard.set_symbols(symbols)
 
         # Market hours (configurable)
         self._tz = ZoneInfo(config.TIMEZONE)
 
     def _init_broker(self):
-        """Initialize the appropriate broker client."""
-        if self.mode == "paper":
-            broker = PaperTradingSimulator()
-            broker.connect()
-            return broker
-        else:
-            broker = AlpacaClient()
-            if not broker.connect():
-                raise RuntimeError("Failed to connect to Alpaca")
-            return broker
+        """Initialize the appropriate broker client via the factory."""
+        broker_name = "paper" if self.mode == "paper" else self.mode
+        broker = BrokerFactory.create(broker_name)
+        if not broker.connect():
+            raise RuntimeError(f"Failed to connect to broker: {broker_name}")
+        return broker
+
+    def _init_ml_enhancer(self):
+        """Initialize ML signal enhancer if available, loading persisted model."""
+        if MLSignalEnhancer is None:
+            return None
+        enhancer = MLSignalEnhancer()
+        from pathlib import Path
+        model_path = Path("models/signal_model.joblib")
+        if model_path.exists():
+            try:
+                enhancer.load_model(str(model_path))
+                logger.info("Loaded ML signal model from disk")
+            except Exception as e:
+                logger.warning(f"Could not load ML model: {e}")
+        return enhancer
 
     def _init_strategy(self):
         """Initialize the selected strategy using the registry."""
@@ -117,6 +170,10 @@ class ExecutionEngine:
         logger.info(f"Starting execution engine: {self.strategy_name} ({self.mode} mode)")
         self.running = True
 
+        # Start dashboard if configured
+        if self.dashboard:
+            self.dashboard.start(background=True)
+
         # Register signal handlers for graceful shutdown
         original_sigint = signal.getsignal(signal.SIGINT)
         original_sigterm = signal.getsignal(signal.SIGTERM)
@@ -161,8 +218,31 @@ class ExecutionEngine:
                 for sig in signals:
                     self._process_signal(sig, account)
 
+            # Check portfolio Greeks for adjustment recommendations
+            self._check_greeks_adjustments()
+
         except Exception as e:
             logger.error(f"Error in execution cycle: {e}", exc_info=True)
+
+    def _check_greeks_adjustments(self):
+        """Check portfolio Greeks and log any adjustment recommendations."""
+        if not self.greeks_monitor or not self.risk_manager.positions:
+            return
+        try:
+            pg = self.greeks_monitor.get_portfolio_greeks(self.risk_manager.positions)
+            recommendations = self.greeks_monitor.check_adjustments(pg, {})
+            for rec in recommendations:
+                level = logging.WARNING if rec.urgency == "high" else logging.INFO
+                logger.log(
+                    level,
+                    f"Greeks adjustment [{rec.urgency}]: {rec.action} - {rec.reason}"
+                )
+                if rec.urgency == "high":
+                    self.notifier.send_alert(
+                        f"Greeks Alert [{rec.urgency}]: {rec.action} - {rec.reason}"
+                    )
+        except Exception as e:
+            logger.debug(f"Greeks check failed: {e}")
 
     def _get_market_data(self) -> Dict:
         """Fetch current market data using yfinance for real prices."""
@@ -188,18 +268,76 @@ class ExecutionEngine:
             logger.warning(f"yfinance fetch failed, using broker fallback: {e}")
             # Fallback: use broker positions for price info (limited)
 
+        # Enrich with IV data if available
+        iv_data: Dict[str, Dict] = {}
+        if self.iv_analyzer:
+            for symbol in symbols:
+                try:
+                    iv = self.iv_analyzer.get_iv_data(symbol)
+                    iv_data[symbol] = {
+                        "iv_rank": iv.iv_rank,
+                        "iv_percentile": iv.iv_percentile,
+                        "current_iv": iv.current_iv,
+                        "hv_20": iv.hv_20,
+                        "hv_50": iv.hv_50,
+                        "regime": self.iv_analyzer.get_iv_regime(symbol),
+                    }
+                except Exception as e:
+                    logger.debug(f"IV fetch failed for {symbol}: {e}")
+
         return {
             "price": prices,
             "price_history": price_history,
             "positions": self.broker.get_positions(),
             "account": self.broker.get_account(),
+            "iv_data": iv_data,
         }
 
     def _process_signal(self, sig, account: Dict):
-        """Process a single trading signal through risk checks and execution."""
-        # Check risk limits
+        """Process a single trading signal through IV filter, ML enhancement, risk checks, and execution."""
+
+        # --- IV rank filter ---
+        if self.iv_analyzer and self.risk_manager._global_constraints:
+            iv_range = self.risk_manager._global_constraints.get("iv_rank_range")
+            if not iv_range:
+                # Try risk posture config directly
+                from src.risk.risk_manager import _load_risk_posture
+                posture = _load_risk_posture()
+                if posture:
+                    iv_range = posture.get("iv_rank_range")
+            if iv_range:
+                min_rank = iv_range.get("min", 0) / 100.0
+                max_rank = iv_range.get("max", 100) / 100.0
+                if not self.iv_analyzer.filter_by_iv(sig.symbol, min_rank, max_rank):
+                    logger.info(
+                        f"IV filter rejected {sig.symbol}: rank outside [{min_rank:.0%}, {max_rank:.0%}]"
+                    )
+                    return
+
+        # --- ML confidence enhancement ---
+        original_confidence = sig.confidence
+        if self.ml_enhancer and self.ml_enhancer.is_trained():
+            try:
+                result = self.ml_enhancer.enhance_signal({
+                    "confidence": sig.confidence,
+                    "iv_rank": sig.metadata.get("iv_rank", 0.5),
+                    "iv_percentile": sig.metadata.get("iv_percentile", 0.5),
+                    "price_history": [],  # Would pass from market data
+                    "dte": sig.metadata.get("dte", 30),
+                    "spread_width": sig.metadata.get("spread_width", 5),
+                    "underlying_price": sig.metadata.get("short_strike", 100),
+                })
+                sig.confidence = result.get("adjusted_confidence", sig.confidence)
+                logger.info(
+                    f"ML adjusted confidence for {sig.symbol}: "
+                    f"{original_confidence:.2f} -> {sig.confidence:.2f}"
+                )
+            except Exception as e:
+                logger.debug(f"ML enhancement failed, using original confidence: {e}")
+
+        # --- Risk check ---
         if not self.risk_manager.can_open_position(
-            {"symbol": sig.symbol, "metadata": sig.metadata},
+            {"symbol": sig.symbol, "confidence": sig.confidence, "metadata": sig.metadata},
             account,
         ):
             logger.warning(f"Risk check failed for {sig.symbol}")
@@ -265,6 +403,11 @@ class ExecutionEngine:
 
     def _cleanup(self):
         """Clean up resources on shutdown."""
+        if self.dashboard:
+            try:
+                self.dashboard.stop()
+            except Exception:
+                pass
         try:
             self.broker.disconnect()
         except Exception as e:

@@ -87,7 +87,9 @@ OpenclawDerivativeTrading/
 │   ├── broker/
 │   │   ├── base_broker.py       # Abstract broker interface
 │   │   ├── alpaca_client.py     # Alpaca API client with retry logic
-│   │   └── paper_trading.py     # In-memory paper trading simulator
+│   │   ├── paper_trading.py     # In-memory paper trading simulator
+│   │   ├── ibkr_client.py       # Interactive Brokers client (ib_insync)
+│   │   └── broker_factory.py    # Broker factory for multi-broker support
 │   ├── strategies/
 │   │   ├── base_strategy.py     # Abstract strategy base class
 │   │   ├── iron_condor.py       # Iron Condor implementation
@@ -101,7 +103,12 @@ OpenclawDerivativeTrading/
 │   ├── knowledge_graph/
 │   │   ├── kg_client.py         # Knowledge graph client
 │   │   └── index.json           # Fast lookup index
-│   ├── data/                    # Data module (placeholder)
+│   ├── data/
+│   │   ├── iv_analyzer.py       # IV rank/percentile analysis with caching
+│   │   ├── greeks.py            # Black-Scholes Greeks and adjustment recs
+│   │   └── ml_signals.py        # ML signal enhancement (GradientBoosting)
+│   ├── dashboard/
+│   │   └── app.py               # Flask web dashboard with polling API
 │   └── utils/
 │       ├── logger.py            # Logging configuration
 │       └── notifications.py     # Webhook-based alerts
@@ -109,11 +116,13 @@ OpenclawDerivativeTrading/
 │   ├── backtest.py              # Strategy backtesting
 │   ├── paper_trade.py           # Paper trading runner
 │   ├── live_trade.py            # Live trading (with confirmation)
+│   ├── dashboard.py             # Standalone dashboard launcher
 │   └── heartbeat.sh             # Scheduled health check script
 ├── tests/
 │   ├── test_strategies.py
 │   ├── test_risk_management.py
-│   └── test_broker.py
+│   ├── test_broker.py
+│   └── test_iv_analyzer.py      # Tests for IV, Greeks, ML, Broker Factory, Dashboard
 ├── docs/
 │   ├── SETUP.md
 │   ├── STRATEGIES.md
@@ -166,6 +175,7 @@ Risk posture can be adjusted by changing `active_posture` in `config/risk_postur
 python -m pytest tests/                                          # Run tests
 python scripts/paper_trade.py                                    # Paper trading
 python scripts/backtest.py --strategy iron_condor --symbol SPY   # Backtest
+python scripts/dashboard.py --port 5000                          # Web dashboard
 ```
 
 The heartbeat script can be scheduled via cron to run health checks during market hours:
@@ -207,11 +217,11 @@ pytest tests/test_strategies.py -v
 - [x] Knowledge graph for collective agent learning
 - [x] Multi-agent orchestration with specialized roles
 - [x] Configurable risk postures (conservative / moderate / aggressive)
-- [ ] IV rank and percentile filtering
-- [ ] Greeks monitoring and position adjustment
-- [ ] Web dashboard for monitoring
-- [ ] Machine learning signal enhancement
-- [ ] Multi-broker support
+- [x] IV rank and percentile filtering -- `src/data/iv_analyzer.py`
+- [x] Greeks monitoring and position adjustment -- `src/data/greeks.py`
+- [x] Web dashboard for monitoring -- `src/dashboard/app.py`
+- [x] Machine learning signal enhancement -- `src/data/ml_signals.py`
+- [x] Multi-broker support -- `src/broker/broker_factory.py`, `src/broker/ibkr_client.py`
 
 ## License
 
