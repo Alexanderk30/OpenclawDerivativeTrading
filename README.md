@@ -1,31 +1,61 @@
-# OpenClaw Derivative Trading Bot
+# OpenClaw Derivative Trading
 
-A sophisticated algorithmic trading system for derivatives (options, futures) built with Python.
+A multi-agent options trading system built in Python. The system coordinates specialized AI agents through an orchestrator to research opportunities, evaluate risk, generate trade proposals, and execute defined-risk options strategies via the Alpaca API.
 
-## 🔒 Security Notice
+## Security Notice
 
-**IMPORTANT**: This repository contains NO API keys, secrets, or credentials. All sensitive configuration must be managed via environment variables or a secure `.env` file (which is gitignored).
+This repository contains no API keys, secrets, or credentials. All sensitive configuration is managed via environment variables or a `.env` file (gitignored). Never commit credentials to version control.
 
-## 🧠 NEW: Collective Knowledge Graph
+## Architecture
 
-This trading bot now includes a **distributed knowledge graph** that enables multiple trading agents to learn collectively. Every trade contributes to shared intelligence that improves strategy performance over time.
+The system is organized around five specialized agents, each with a defined role and communication protocol. The orchestrator routes market triggers to the appropriate agents, enforces safety constraints, and aggregates their outputs into trading decisions.
 
-### Knowledge Graph Features:
-- **Trade Outcome Storage**: Capture P&L, market context, and lessons learned
-- **Strategy Insights**: Share discoveries about what works/doesn't work
-- **Pattern Recognition**: Automatically identify successful setups
-- **Collective Learning**: All agents benefit from each other's experience
+**Agent pipeline:** Research Agent -> Trading Agent -> Risk Agent -> Execution Engine
 
-### Quick Usage:
+- **Orchestrator** -- Central coordinator. Routes triggers, aggregates outputs, enforces global safety. See `agents/orchestrator.md`.
+- **Research Agent** -- Market intelligence. Fetches data, calculates indicators (SMA, RSI, IV rank), assesses market regime. See `agents/research_agent.md`.
+- **Trading Agent** -- Strategy specialist. Evaluates research against active strategies, generates concrete trade proposals with strikes, expirations, and exit plans. See `agents/trading_agent.md`.
+- **Risk Agent** -- Full veto authority. Validates proposals against portfolio constraints, calculates position sizing, enforces exposure limits. See `agents/risk_agent.md`.
+- **AI Dev Agent** -- Meta-optimizer. Monitors agent performance, identifies bottlenecks, suggests prompt refinements. See `agents/ai_dev_agent.md`.
+
+## Strategies
+
+**Iron Condor** -- Sells OTM puts and calls with protective wings. Neutral outlook, defined risk, suited to range-bound and low-volatility environments. Four legs per position.
+
+**Credit Spreads** -- Directional spreads (bull put or bear call) with defined risk. Two legs per position. Direction is determined by an adaptive SMA crossover that works with as few as five data points.
+
+**The Wheel** -- Two-phase income strategy. Phase 1 sells cash-secured puts; if assigned, Phase 2 sells covered calls on the acquired shares. Repeats on call-away. Suited to stocks the trader is willing to own long-term.
+
+All strategies are registered centrally in the execution engine. The names `wheel_strategy` and `the_wheel` are interchangeable aliases.
+
+## Risk Management
+
+Risk enforcement is layered across the system and driven by a configurable risk posture defined in `config/risk_posture.json`. Three postures are available (conservative, moderate, aggressive), each with its own limits for per-trade risk, position sizing, daily loss, portfolio heat, correlation exposure, and minimum signal confidence. The active posture defaults to moderate.
+
+Key constraints enforced by the risk manager:
+
+- Per-trade risk capped at a configurable percentage of portfolio value
+- Portfolio heat (total open risk) capped at a configurable percentage
+- Daily loss limit triggers a halt on new positions
+- Per-symbol position count limits
+- Minimum signal confidence threshold (signals below are rejected)
+- Emergency stop closes all positions via broker
+
+The risk manager reads limits from `risk_posture.json` at initialization and falls back to environment variable defaults in `config/settings.py` if the file is unavailable.
+
+## Collective Knowledge Graph
+
+A file-based distributed knowledge system that enables agents to learn collectively. Every trade outcome, market pattern, strategy insight, and parameter tuning result is stored and indexed for retrieval by any agent.
+
 ```python
 from src.knowledge_graph import get_kg
 
 kg = get_kg()
 
-# Before trading - check historical performance
+# Query historical performance before trading
 perf = kg.get_performance_summary(symbol="SPY", strategy="iron_condor")
 
-# After trading - store what you learned
+# Store outcomes after trading
 kg.store_trade_outcome(
     agent_id="my_agent",
     symbol="SPY",
@@ -37,227 +67,163 @@ kg.store_trade_outcome(
 
 See `docs/KNOWLEDGE_GRAPH.md` for full documentation.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 OpenclawDerivativeTrading/
-├── README.md                 # This file
-├── .gitignore               # Ensures secrets are never committed
-├── requirements.txt         # Python dependencies
+├── agents/
+│   ├── orchestrator.md          # Orchestrator agent spec
+│   ├── research_agent.md        # Research agent spec
+│   ├── trading_agent.md         # Trading/strategy agent spec
+│   ├── risk_agent.md            # Risk agent spec
+│   └── ai_dev_agent.md          # Meta-optimizer agent spec
 ├── config/
 │   ├── __init__.py
-│   ├── settings.py          # Configuration loader (reads from env)
-│   └── strategies.yaml      # Strategy configurations
+│   ├── settings.py              # Environment-based configuration
+│   ├── strategies.yaml          # Per-strategy parameters
+│   └── risk_posture.json        # Risk posture definitions
 ├── src/
-│   ├── __init__.py
-│   ├── main.py              # Entry point
+│   ├── main.py                  # CLI entry point
 │   ├── broker/
-│   │   ├── __init__.py
-│   │   ├── alpaca_client.py     # Alpaca API wrapper
-│   │   ├── base_broker.py       # Abstract base class
-│   │   └── paper_trading.py     # Paper trading simulator
+│   │   ├── base_broker.py       # Abstract broker interface
+│   │   ├── alpaca_client.py     # Alpaca API client with retry logic
+│   │   └── paper_trading.py     # In-memory paper trading simulator
 │   ├── strategies/
-│   │   ├── __init__.py
-│   │   ├── base_strategy.py     # Abstract strategy base
-│   │   ├── iron_condor.py       # Iron Condor options strategy
-│   │   ├── credit_spread.py     # Credit spread strategy
-│   │   └── wheel_strategy.py    # The Wheel (CSP + CC)
+│   │   ├── base_strategy.py     # Abstract strategy base class
+│   │   ├── iron_condor.py       # Iron Condor implementation
+│   │   ├── credit_spread.py     # Credit Spread implementation
+│   │   └── wheel_strategy.py    # The Wheel implementation
 │   ├── risk/
-│   │   ├── __init__.py
-│   │   ├── position_sizer.py    # Position sizing logic
 │   │   ├── risk_manager.py      # Portfolio risk management
-│   │   └── max_loss_limits.py   # Loss limit enforcement
+│   │   └── position_sizer.py    # Position sizing (risk-based, Kelly)
 │   ├── execution/
-│   │   ├── __init__.py
-│   │   ├── order_manager.py     # Order lifecycle management
-│   │   └── execution_engine.py  # Trade execution logic
-│   ├── knowledge_graph/         # NEW: Collective learning system
-│   │   ├── __init__.py
+│   │   └── execution_engine.py  # Main trading loop and signal processing
+│   ├── knowledge_graph/
 │   │   ├── kg_client.py         # Knowledge graph client
-│   │   ├── index.json           # Fast lookup index
-│   │   └── nodes/               # Knowledge storage
-│   │       ├── trade_outcomes/
-│   │       ├── market_patterns/
-│   │       ├── strategy_insights/
-│   │       └── parameter_tuning/
-│   ├── data/
-│   │   ├── __init__.py
-│   │   ├── market_data.py       # Real-time data feed
-│   │   └── historical_data.py   # Historical data loader
+│   │   └── index.json           # Fast lookup index
+│   ├── data/                    # Data module (placeholder)
 │   └── utils/
-│       ├── __init__.py
 │       ├── logger.py            # Logging configuration
-│       └── notifications.py     # Alert system
+│       └── notifications.py     # Webhook-based alerts
+├── scripts/
+│   ├── backtest.py              # Strategy backtesting
+│   ├── paper_trade.py           # Paper trading runner
+│   ├── live_trade.py            # Live trading (with confirmation)
+│   └── heartbeat.sh             # Scheduled health check script
 ├── tests/
-│   ├── __init__.py
 │   ├── test_strategies.py
 │   ├── test_risk_management.py
 │   └── test_broker.py
-├── scripts/
-│   ├── backtest.py          # Backtesting script
-│   ├── paper_trade.py       # Paper trading runner
-│   └── live_trade.py        # Live trading (use with caution)
-└── docs/
-    ├── SETUP.md             # Setup instructions
-    ├── STRATEGIES.md        # Strategy documentation
-    ├── KNOWLEDGE_GRAPH.md   # Knowledge graph documentation
-    └── API.md               # API reference
+├── docs/
+│   ├── SETUP.md
+│   ├── STRATEGIES.md
+│   └── KNOWLEDGE_GRAPH.md
+├── requirements.txt
+├── LICENSE
+└── .gitignore
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
-### 1. Installation
+### Installation
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/Alexanderk30/OpenclawDerivativeTrading.git
 cd OpenclawDerivativeTrading
 
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Configuration
+### Configuration
 
-Create a `.env` file in the project root (this file is gitignored and never committed):
+Create a `.env` file in the project root:
 
 ```bash
-# Alpaca API Credentials
 ALPACA_API_KEY=your_api_key_here
 ALPACA_SECRET_KEY=your_secret_key_here
-ALPACA_BASE_URL=https://paper-api.alpaca.markets  # Use paper trading first!
+ALPACA_BASE_URL=https://paper-api.alpaca.markets
 
-# Trading Configuration
-MAX_PORTFOLIO_RISK=0.02          # Max 2% portfolio risk per trade
-MAX_POSITION_SIZE=0.10           # Max 10% in single position
-DEFAULT_QUANTITY=1               # Default contract quantity
-ENABLE_NOTIFICATIONS=true
-NOTIFICATION_WEBHOOK_URL=your_webhook_url
+MAX_PORTFOLIO_RISK=0.02
+MAX_POSITION_SIZE=0.10
+MAX_DAILY_LOSS=0.05
+DEFAULT_QUANTITY=1
 
-# Logging
+ENABLE_NOTIFICATIONS=false
+NOTIFICATION_WEBHOOK_URL=
+
 LOG_LEVEL=INFO
 LOG_FILE=logs/trading.log
 ```
 
-### 3. Verify Setup
+Risk posture can be adjusted by changing `active_posture` in `config/risk_posture.json` to `conservative`, `moderate`, or `aggressive`.
+
+### Running
 
 ```bash
-python -m pytest tests/          # Run tests
-python scripts/paper_trade.py    # Start paper trading
+python -m pytest tests/                                          # Run tests
+python scripts/paper_trade.py                                    # Paper trading
+python scripts/backtest.py --strategy iron_condor --symbol SPY   # Backtest
 ```
 
-## 📊 Available Strategies
-
-### Iron Condor
-- **Type**: Options (4 legs)
-- **Outlook**: Neutral / Range-bound
-- **Risk**: Defined (credit received)
-- **Use Case**: Low volatility environments
-
-### Credit Spreads
-- **Type**: Options (2 legs)
-- **Outlook**: Bullish (put spread) or Bearish (call spread)
-- **Risk**: Defined (spread width - credit)
-- **Use Case**: Directional plays with defined risk
-
-### The Wheel
-- **Type**: Options (CSPs + Covered Calls)
-- **Outlook**: Bullish long-term
-- **Risk**: Assignment risk (stock ownership)
-- **Use Case**: Income generation on stocks you want to own
-
-## ⚠️ Risk Management
-
-This bot implements multiple safety layers:
-
-1. **Position Sizing**: Never risk more than configured % per trade
-2. **Portfolio Heat**: Total exposure limits
-3. **Max Loss Limits**: Automatic position closure at loss thresholds
-4. **Paper Trading Mode**: All new strategies run in paper mode first
-5. **Kill Switch**: Emergency stop functionality
-
-## 🧪 Testing
+The heartbeat script can be scheduled via cron to run health checks during market hours:
 
 ```bash
-# Run all tests
-pytest tests/
-
-# Run with coverage
-pytest tests/ --cov=src
-
-# Run specific test
-pytest tests/test_strategies.py -v
+chmod +x scripts/heartbeat.sh
+# Example: run every 5 minutes during market hours
+*/5 9-16 * * 1-5 /path/to/scripts/heartbeat.sh
 ```
 
-## 📈 Backtesting
-
-```bash
-python scripts/backtest.py --strategy iron_condor --symbol SPY --days 90
-```
-
-## 🔔 Notifications
-
-Configure webhooks for:
-- Trade executions
-- Risk limit breaches
-- Daily P&L summaries
-- Error alerts
-
-## 🛠️ Development
+## Development
 
 ### Adding a New Strategy
 
-1. Create `src/strategies/your_strategy.py`
-2. Inherit from `BaseStrategy`
-3. Implement required methods: `generate_signals()`, `calculate_position_size()`
-4. Add tests in `tests/`
-5. Update documentation
+1. Create `src/strategies/your_strategy.py` inheriting from `BaseStrategy`.
+2. Implement `generate_signals()` and `calculate_position_size()`.
+3. Register the strategy in `STRATEGY_REGISTRY` in `src/execution/execution_engine.py`.
+4. Add configuration to `config/strategies.yaml`.
+5. Add tests in `tests/`.
 
-### Code Style
+### Code Quality
 
 ```bash
-# Format code
 black src/ tests/
-
-# Lint
 flake8 src/ tests/
-
-# Type check
 mypy src/
 ```
 
-## 📋 TODO
+### Testing
 
-- [x] Implement knowledge graph for collective learning
-- [ ] Implement IV rank/percentile filtering
-- [ ] Add more complex Greeks monitoring
+```bash
+pytest tests/
+pytest tests/ --cov=src
+pytest tests/test_strategies.py -v
+```
+
+## Roadmap
+
+- [x] Knowledge graph for collective agent learning
+- [x] Multi-agent orchestration with specialized roles
+- [x] Configurable risk postures (conservative / moderate / aggressive)
+- [ ] IV rank and percentile filtering
+- [ ] Greeks monitoring and position adjustment
 - [ ] Web dashboard for monitoring
 - [ ] Machine learning signal enhancement
 - [ ] Multi-broker support
 
-## 📜 License
+## License
 
-MIT License - See LICENSE file
+MIT License. See LICENSE file.
 
-## ⚡ Disclaimer
+## Disclaimer
 
-**Trading involves substantial risk of loss. This software is for educational purposes only. Past performance does not guarantee future results. Always use paper trading extensively before live trading.**
+Trading involves substantial risk of loss. This software is for educational purposes only. Past performance does not guarantee future results. Use paper trading extensively before considering live execution.
 
-## 🤝 Contributing
+## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Write tests for new functionality
-4. Submit a pull request
-
-## 📞 Support
-
-For issues or questions, please open a GitHub issue.
-
----
-
-**Remember**: Never commit API keys or secrets to version control!
+1. Fork the repository.
+2. Create a feature branch.
+3. Write tests for new functionality.
+4. Submit a pull request.
