@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-WORKSPACE="/Users/clawd/.openclaw/workspace"
+WORKSPACE="${OPENCLAW_WORKSPACE:-$HOME/.openclaw/workspace}"
 LOG_FILE="$WORKSPACE/logs/trading_heartbeat.log"
 ORCHESTRATOR_CHANNEL="discord://orchestrator"
 
